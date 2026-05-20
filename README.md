@@ -7,7 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/ambrose-kutti/Resume-Search-Agent?style=for-the-badge)](https://github.com/ambrose-kutti/Resume-Search-Agent/issues)
 [![GitHub license](https://img.shields.io/github/license/ambrose-kutti/Resume-Search-Agent?style=for-the-badge)](LICENSE)
 
-**A production-grade AI Agent for intelligent resume search and talent matching.**
+**A top-grade AI Agent for intelligent resume search and talent matching.**
 
 </div>
 
