@@ -2,8 +2,6 @@
 
 <div align="center">
 
-<!-- TODO: Add project logo -->
-
 [![GitHub stars](https://img.shields.io/github/stars/ambrose-kutti/Resume-Search-Agent?style=for-the-badge)](https://github.com/ambrose-kutti/Resume-Search-Agent/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/ambrose-kutti/Resume-Search-Agent?style=for-the-badge)](https://github.com/ambrose-kutti/Resume-Search-Agent/network)
 [![GitHub issues](https://img.shields.io/github/issues/ambrose-kutti/Resume-Search-Agent?style=for-the-badge)](https://github.com/ambrose-kutti/Resume-Search-Agent/issues)
