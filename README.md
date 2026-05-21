@@ -83,16 +83,21 @@ Before you begin, ensure you have the following installed:
     Configure your environment variables in the newly created `.env` file:
     ```
     # --- LLM Configuration ---
-    #  OLLAMA 
-    # URL where Ollama is running
-    OLLAMA_BASE_URL = http://localhost:11434
-
+    
+    OLLAMA_BASE_URL = http://localhost:11434         # URL where Ollama is running
+    EMBEDDING_MODEL=nomic-embed-text                 # Run: ollama pull nomic-embed-text
+    
     # --- ChromaDB Configuration ---
-    CHROMA_DB_PATH="./chroma_db" # Path where ChromaDB will store its data (local persistent storage)
 
+    CHROMA_COLLECTION = esumes                       # Name of the ChromaDB collection that stores resume vectors
+    CHROMA_DB_PATH="./chroma_db"                     # Path where ChromaDB will store its data (local persistent storage)
+    
     # --- Backend API Configuration ---
-    FASTAPI_HOST="0.0.0.0"
-    FASTAPI_PORT=8000
+    #  API 
+    # Comma-separated list of allowed CORS origins
+    # Use * for local development only. In production, set your real domain.
+    # Example: https://yourdomain.com,https://admin.yourdomain.com
+    ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
     ```
     *Adjust the LLM-related variables based on your chosen LLM provider.*
 
