@@ -78,7 +78,7 @@ Before you begin, ensure you have the following installed:
 3.  **Environment setup**
     Create a `.env` file in the root directory for your environment variables.
     ```bash
-    cp .env.example .env # If .env.example exists. Otherwise, create manually.
+    cp .env.example .env     # If .env.example exists. Otherwise, create manually.
     ```
     Configure your environment variables in the newly created `.env` file:
     ```
@@ -93,7 +93,7 @@ Before you begin, ensure you have the following installed:
     CHROMA_DB_PATH="./chroma_db"                     # Path where ChromaDB will store its data (local persistent storage)
     
     # --- Backend API Configuration ---
-    #  API 
+    
     # Comma-separated list of allowed CORS origins
     # Use * for local development only. In production, set your real domain.
     # Example: https://yourdomain.com,https://admin.yourdomain.com
@@ -114,23 +114,13 @@ Before you begin, ensure you have the following installed:
 6.  **Start the backend development server**
     Navigate to the root of the project and run:
     ```bash
-    uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn api.main:app --host 0.0.0.0 --port 5000 --reload
     ```
     This assumes your main FastAPI application is defined in `api/main.py` and the app instance is named `app`.
 
-7.  **Start the frontend development server**
-    The `frontend` directory contains the web UI. Please refer to its specific `README.md` or package manager instructions for setup.
-    ```bash
-    cd frontend
-    # Example for a Node.js-based frontend (e.g., React, Vue, Angular):
-    # npm install
-    # npm run dev
-    # cd .. # Go back to root directory
-    ```
-    *Note: The specific commands for the frontend will depend on its chosen framework and build tools. Please consult the `frontend/` directory for details.*
 
 8.  **Open your browser**
-    Once both backend and frontend are running, visit `http://localhost:[detected_frontend_port]` (e.g., `http://localhost:3000` for React/Next.js) to access the application. The backend API will be available at `http://localhost:8000`.
+    Once both backend is running, visit the backend API that will be available at `http://localhost:5000`.
 
 ## 📁 Project Structure
 
@@ -160,6 +150,7 @@ Resume-Search-Agent/
 │   ├── retriever.py       # Logic for interacting with ChromaDB (inferred)
 │   └── orchestrator.py    # Combines agent and retriever for search (inferred)
 └── README.md              # Project README file
+└── Requirements.txt       # Requirements to be downloaded
 ```
 
 ## ⚙️ Configuration
