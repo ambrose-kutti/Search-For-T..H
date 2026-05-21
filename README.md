@@ -71,7 +71,7 @@ Before you begin, ensure you have the following installed:
     It's recommended to use a virtual environment.
     ```bash
     python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    venv\Scripts\activate     # On Mac use `source venv/bin/activate`
    
     ```
 
