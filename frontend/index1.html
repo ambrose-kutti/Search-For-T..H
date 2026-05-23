@@ -189,7 +189,7 @@
       border-top: 1px solid var(--border);
     }
 
-    /* SEARCH BUTTON */
+    /*  SEARCH BUTTON  */
     .btn-search {
       background: linear-gradient(135deg, #2563eb, #3b82f6);
       border: none;
@@ -506,6 +506,26 @@
       margin-top: 2px;
     }
 
+    .filter-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 100px;
+      color: var(--warn);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      margin-left: 10px;
+    }
+
+    .meta-divider {
+      color: var(--border);
+      font-size: 14px;
+      padding: 0 2px;
+    }
+
     /*  ANIMATIONS  */
     @keyframes fadeDown  { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:none; } }
     @keyframes fadeUp    { from { opacity:0; transform:translateY(12px);  } to { opacity:1; transform:none; } }
@@ -552,7 +572,7 @@
     </div>
     <div class="stat-item">
       <div class="stat-num" id="statScore">—</div>
-      <div class="stat-lbl">Top Score</div>
+      <div class="stat-lbl">Top Match Score</div>
     </div>
   </div>
 
@@ -564,7 +584,6 @@
           <label class="input-label">Search Query</label>
           <input type="text" id="queryInput"
             placeholder="e.g. Python developer with FastAPI and AWS experience"
-            onfocus="this.select()"
             autocomplete="off" />
         </div>
         <button class="btn-search" id="searchBtn" onclick="doSearch()">Search →</button>
@@ -599,19 +618,19 @@
 </div>
 
 <script>
-  const API = 'http://127.0.0.1:8000';
+  const API = window.RESUME_API_URL || 'http://127.0.0.1:8000';
 
   //  Load stats on page open 
   async function loadStats() {
     try {
-      const res = await fetch(`${API}/stats`);
+      const res  = await fetch(`${API}/stats`);
       const data = await res.json();
       document.getElementById('statTotal').textContent = data.total_resumes_indexed ?? '—';
     } catch { }
   }
   loadStats();
 
-  //  Enter key support 
+  //  Enter key 
   document.getElementById('queryInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') doSearch();
   });
@@ -622,6 +641,25 @@
     doSearch();
   }
 
+  //  Parse candidate name from filename (JS-side fallback) 
+  function nameFromFilename(filename) {
+    let base = filename.replace(/\.[^.]+$/, '');              // remove extension
+    base = base.replace(/\[\d+y_\d+m\]/g, '');               // remove [12y_0m]
+    base = base.replace(/(?:naukri|resume|cv|profile|updated|new|final)_?/gi, ''); // remove keywords
+    base = base.replace(/[_\-]+/g, ' ').trim();               // _ and - → space
+    base = base.replace(/([a-z])([A-Z])/g, '$1 $2');          // camelCase → words
+    base = base.replace(/\s+/g, ' ').trim();
+    if (!base || base.length < 3) return null;
+    return base.replace(/\b\w/g, c => c.toUpperCase());       // Title Case
+  }
+
+  //  Parse experience from filename (JS-side fallback) 
+  // Naukri_Name[12y_0m].pdf → 12
+  function expFromFilename(filename) {
+    const m = filename.match(/\[(\d+)y_\d+m\]/);
+    return m ? parseInt(m[1]) : null;
+  }
+
   //  Score ring colour 
   function scoreColor(s) {
     if (s >= 0.80) return '#10b981';
@@ -630,12 +668,11 @@
     return '#64748b';
   }
 
-  //  Build score ring SVG 
+  //  Score ring SVG 
   function scoreRing(score) {
-    const pct   = Math.min(score, 1);
     const r     = 20;
     const circ  = 2 * Math.PI * r;
-    const dash  = circ * pct;
+    const dash  = circ * Math.min(score, 1);
     const color = scoreColor(score);
     return `
       <div class="score-ring">
@@ -652,14 +689,15 @@
 
   //  Rank badge 
   function rankBadge(rank) {
-    const cls = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-n';
+    const cls  = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-n';
     const icon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
     return `<div class="rank-badge ${cls}">${icon}</div>`;
   }
 
   //  Skill tags 
   function skillTags(skills) {
-    if (!skills || skills.length === 0) return '<span style="font-size:12px;color:var(--muted)">No skills detected</span>';
+    if (!skills || skills.length === 0)
+      return '<span style="font-size:12px;color:var(--muted)">No skills detected</span>';
     const show  = skills.slice(0, 6);
     const extra = skills.length - show.length;
     let html = show.map(s => `<span class="skill-tag">${s}</span>`).join('');
@@ -672,11 +710,11 @@
     const query = document.getElementById('queryInput').value.trim();
     if (!query) return;
 
-    const exp = document.getElementById('expInput').value;
-    const loc = document.getElementById('locInput').value.trim();
+    const expVal = document.getElementById('expInput').value;
+    const locVal = document.getElementById('locInput').value.trim();
 
     const btn = document.getElementById('searchBtn');
-    btn.disabled = true;
+    btn.disabled    = true;
     btn.textContent = 'Searching…';
 
     const out = document.getElementById('outputArea');
@@ -687,13 +725,11 @@
       </div>`;
 
     const body = { query };
-    if (exp) body.min_experience = parseInt(exp);
-    if (loc) body.location = loc;
-
-    const t0 = performance.now();
+    if (expVal) body.min_experience = parseInt(expVal);
+    if (locVal) body.location = locVal;
 
     try {
-      const res  = await fetch(`${API}/search`, {
+      const res = await fetch(`${API}/search`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body)
@@ -705,21 +741,14 @@
       }
 
       const data = await res.json();
-      const ms   = Math.round(performance.now() - t0);
 
       // Update stats strip
       document.getElementById('statResults').textContent = data.total_results;
-      if (data.results.length > 0) {
+      if (data.results.length > 0)
         document.getElementById('statScore').textContent =
           Math.round(data.results[0].similarity_score * 100) + '%';
-      }
 
-      renderResults(data, ms);
-
-      // Automatically clear inputs after results arrive
-      document.getElementById('queryInput').value = '';
-      document.getElementById('expInput').value = '';
-      document.getElementById('locInput').value = '';
+      renderResults(data, { exp: expVal, loc: locVal });
 
     } catch (err) {
       out.innerHTML = `
@@ -727,13 +756,13 @@
           ⚠ ${err.message}. Make sure the API is running at ${API}
         </div>`;
     } finally {
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = 'Search →';
     }
   }
 
   //  Render results 
-  function renderResults(data, ms) {
+  function renderResults(data, activeFilters = {}) {
     const out = document.getElementById('outputArea');
 
     if (!data.results || data.results.length === 0) {
@@ -741,38 +770,74 @@
         <div class="empty-state">
           <div class="empty-icon">🔍</div>
           <div class="empty-title">No results found</div>
-          <div class="empty-sub">Try a broader query or remove filters</div>
+          <div class="empty-sub">Try a broader query or remove the filters</div>
         </div>`;
       return;
+    }
+
+    // Status bar — count only, no timing 
+    let filterNote = '';
+    if (activeFilters.exp || activeFilters.loc) {
+      const parts = [];
+      if (activeFilters.exp) parts.push(`≥ ${activeFilters.exp} yrs exp`);
+      if (activeFilters.loc) parts.push(activeFilters.loc);
+      filterNote = `<span class="filter-note">🔒 ${parts.join(' · ')}</span>`;
     }
 
     const statusHtml = `
       <div class="status-bar">
         <span class="status-text">
-          Found <strong>${data.total_results}</strong> results in <strong>${ms}ms</strong>
+          Found <strong>${data.total_results}</strong> result${data.total_results !== 1 ? 's' : ''}
+          ${filterNote}
         </span>
         <span class="understood-pill" title="${data.understood_as}">
           💡 ${data.understood_as}
         </span>
       </div>`;
 
+    // q Cards 
     const cardsHtml = data.results.map(r => {
-      const name = r.candidate_name && r.candidate_name !== 'Unknown'
+
+      // Name — use backend value if real, else parse from filename
+      let displayName = r.candidate_name && r.candidate_name !== 'Unknown'
         ? r.candidate_name
-        : `Candidate · ${r.file_name.replace(/\.[^.]+$/, '')}`;
+        : (nameFromFilename(r.file_name) || 'Unknown Candidate');
+
+      // Experience — backend value; fallback to filename parsing
+      let expYears = r.experience_years;
+      if (!expYears || expYears === 0) {
+        const fromFile = expFromFilename(r.file_name);
+        if (fromFile !== null) expYears = fromFile;
+      }
+      const expDisplay = expYears > 0
+        ? `${expYears} yr${expYears !== 1 ? 's' : ''}`
+        : 'Exp not specified';
+
+      // Location
+      const locDisplay = r.location && r.location !== 'Unknown'
+        ? r.location
+        : 'Location not specified';
 
       return `
         <div class="result-card">
           ${rankBadge(r.rank)}
+
           <div class="card-body">
-            <div class="card-name">${name}</div>
+            <div class="card-name">${displayName}</div>
+
             <div class="card-meta">
-              <span class="meta-item"><span class="meta-icon">💼</span>${r.experience_years} yr${r.experience_years !== 1 ? 's' : ''} exp</span>
-              <span class="meta-item"><span class="meta-icon">📍</span>${r.location !== 'Unknown' ? r.location : 'Location N/A'}</span>
-              <span class="meta-item"><span class="meta-icon">📄</span>${r.file_name}</span>
+              <span class="meta-item">
+                <span class="meta-icon">💼</span>${expDisplay}
+              </span>
+              <span class="meta-divider">·</span>
+              <span class="meta-item">
+                <span class="meta-icon">📍</span>${locDisplay}
+              </span>
             </div>
+
             <div class="skills-wrap">${skillTags(r.matched_skills)}</div>
           </div>
+
           <div class="card-right">
             ${scoreRing(r.similarity_score)}
             <a class="btn-link" href="${r.sandbox_link}" target="_blank" rel="noopener">

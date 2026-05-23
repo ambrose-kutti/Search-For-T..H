@@ -3,7 +3,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 def get_embedding(text: str, ollama_base_url: str, model: str) -> list[float]:
     """
     Generate a vector embedding for a given text using Ollama.
@@ -27,14 +26,12 @@ def get_embedding(text: str, ollama_base_url: str, model: str) -> list[float]:
         response.raise_for_status()
         embedding = response.json().get("embedding", [])
         return embedding
-
     except requests.exceptions.ConnectionError:
         logger.error("Cannot connect to Ollama. Make sure Ollama is running: ollama serve")
         return []
     except Exception as e:
         logger.error(f"Embedding generation failed: {e}")
         return []
-
 
 def get_embeddings_batch(
     texts: list[str],
@@ -48,12 +45,10 @@ def get_embeddings_batch(
     """
     embeddings = []
     total = len(texts)
-
     for i, text in enumerate(texts):
         embedding = get_embedding(text, ollama_base_url, model)
         embeddings.append(embedding)
 
         if (i + 1) % 10 == 0 or (i + 1) == total:
             logger.info(f"Embedded {i + 1}/{total} resumes")
-
     return embeddings

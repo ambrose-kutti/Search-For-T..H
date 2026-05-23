@@ -1,12 +1,10 @@
 from pydantic import BaseModel
 from typing import Optional
 
-
 class SearchRequest(BaseModel):
     query: str
     min_experience: Optional[int]  = None   # filter: minimum years of experience
     location:       Optional[str]  = None   # filter: candidate location
-
 
 class CandidateResult(BaseModel):
     rank:             int
@@ -17,7 +15,6 @@ class CandidateResult(BaseModel):
     experience_years: int
     location:         str
     file_name:        str
-
 
 class SearchResponse(BaseModel):
     original_query:  str

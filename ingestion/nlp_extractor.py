@@ -2,16 +2,11 @@
 nlp_extractor.py — Production-grade metadata extraction for resumes.
 
 Strategy:
-  - Candidate name   → spaCy NER (fast, no LLM cost)
-  - Location         → spaCy NER (fast, no LLM cost)
-  - Experience years → regex patterns (fast, deterministic)
-  - Skills           → Ollama LLM (no hardcoded list; extracts any skill
-                       the LLM recognises from the resume text itself)
-
-This approach requires zero maintenance — no skills list to update
-as new technologies emerge.
+  - Candidate name   → filename parse first (Naukri format), spaCy NER as fallback
+  - Experience years → filename parse first ([Xy_Ym] format), regex on text as fallback
+  - Location         → spaCy NER
+  - Skills           → Ollama LLM (no hardcoded list)
 """
-
 import re
 import sys
 import os
@@ -22,17 +17,16 @@ import spacy
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import OLLAMA_BASE_URL, LLM_MODEL
-
 logger = logging.getLogger(__name__)
 
-# ── spaCy — load once at module level ─────────────────────────────────────────
+# spaCy 
 try:
     _nlp = spacy.load("en_core_web_sm")
 except OSError:
     logger.error("spaCy model not found. Run: python -m spacy download en_core_web_sm")
     _nlp = None
 
-# ── Experience regex patterns ─────────────────────────────────────────────────
+# Experience regex (resume text) 
 _EXP_PATTERNS = [
     r"(\d+)\+?\s*years?\s+of\s+experience",
     r"(\d+)\+?\s*years?\s+experience",
@@ -41,36 +35,84 @@ _EXP_PATTERNS = [
     r"(\d+)\+?\s*yrs?\s+experience",
 ]
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# INDIVIDUAL EXTRACTORS
-# ─────────────────────────────────────────────────────────────────────────────
-
-def extract_name(text: str) -> str:
+# FILENAME-BASED EXTRACTORS
+def _split_camel_case(text: str) -> str:
     """
-    Extract candidate name using spaCy NER.
-    Checks the first 600 characters where the name is almost always found.
-    Returns 'Unknown' if nothing is detected.
+    Split CamelCase or PascalCase into separate words.
+    e.g. "SubhasishSingha" → "Subhasish Singha"
+         "KoushalRathor"   → "Koushal Rathor"
     """
+    return re.sub(r"([a-z])([A-Z])", r"\1 \2", text).strip()
+
+def extract_name_from_filename(file_name: str) -> str:
+    """
+    Extract candidate name from resume filename.
+
+    Handles patterns:
+      - Naukri_FirstnameLastname[Xy_Ym].pdf  → "Firstname Lastname"
+      - Naukri_FirstnameLastname.pdf          → "Firstname Lastname"
+      - John_Doe_Resume.pdf                   → "John Doe"
+      - JohnDoe.pdf                           → "John Doe"
+
+    Returns empty string if no name can be parsed confidently.
+    """
+    base = os.path.splitext(file_name)[0]   # Strip extension
+    base = re.sub(r"\[\d+y_\d+m\]", "", base).strip()   # Remove experience bracket [12y_0m] if present
+    base = re.sub(r"(?i)(resume|cv|profile|updated|new|final|naukri)_?", "", base).strip("_- ") # Remove common suffixes
+    parts = re.split(r"[_\-]", base)    # Split by underscore or hyphen, take remaining parts
+    parts = [p.strip() for p in parts if p.strip()]
+    if not parts:
+        return ""
+
+    # Rejoin and split CamelCase
+    joined = " ".join(parts)
+    name   = _split_camel_case(joined)
+
+    # Basic sanity check — must look like a name (2+ chars, not all digits)
+    if len(name) < 3 or name.isdigit():
+        return ""
+    return name.title()
+
+def extract_experience_from_filename(file_name: str) -> int:
+    """
+    Extract years of experience from Naukri-style filename bracket.
+
+    Pattern: [12y_0m] → 12 years
+             [9y_6m]  → 9 years
+             [0y_8m]  → 0 years
+
+    Returns -1 if no bracket pattern found (so caller knows to fall back).
+    """
+    match = re.search(r"\[(\d+)y_(\d+)m\]", file_name)
+    if match:
+        return int(match.group(1))
+    return -1
+
+#  TEXT-BASED EXTRACTORS (fallbacks)
+def extract_name_from_text(text: str) -> str:
+    """Extract name using spaCy NER — used as fallback if filename parse fails."""
     if not _nlp:
         return "Unknown"
     doc = _nlp(text[:600])
     for ent in doc.ents:
         if ent.label_ == "PERSON" and len(ent.text.split()) >= 2:
             return ent.text.strip()
-    # fallback: any PERSON entity even single name
     for ent in doc.ents:
         if ent.label_ == "PERSON":
             return ent.text.strip()
     return "Unknown"
 
+def extract_experience_from_text(text: str) -> int:
+    """Extract years of experience from resume text using regex."""
+    found = []
+    text_lower = text.lower()
+    for pattern in _EXP_PATTERNS:
+        for match in re.finditer(pattern, text_lower):
+            found.append(int(match.group(1)))
+    return max(found) if found else 0
 
 def extract_location(text: str) -> str:
-    """
-    Extract candidate location using spaCy GPE (geo-political entity).
-    Checks the first 1500 characters.
-    Returns 'Unknown' if nothing is detected.
-    """
+    """Extract location using spaCy GPE."""
     if not _nlp:
         return "Unknown"
     doc = _nlp(text[:1500])
@@ -79,55 +121,33 @@ def extract_location(text: str) -> str:
             return ent.text.strip()
     return "Unknown"
 
-
-def extract_experience_years(text: str) -> int:
-    """
-    Extract total years of experience using regex.
-    Returns the largest number found (most likely total experience).
-    Returns 0 if no pattern matches.
-    """
-    found = []
-    text_lower = text.lower()
-    for pattern in _EXP_PATTERNS:
-        for match in re.finditer(pattern, text_lower):
-            found.append(int(match.group(1)))
-    return max(found) if found else 0
-
-
 def extract_skills_via_llm(text: str) -> list[str]:
     """
-    Use the Ollama LLM to extract all technical skills from resume text.
-
-    No hardcoded skills list — the LLM reads the resume and identifies
-    every technical skill, tool, framework, language, and platform mentioned.
-
-    Falls back to an empty list if the LLM call fails, so ingestion
-    never breaks even if Ollama is temporarily unavailable.
+    Use Ollama LLM to extract all technical skills from resume text.
+    No hardcoded skills list — LLM reads the resume and identifies everything.
+    Falls back to empty list if LLM is unavailable.
     """
-    # Use first 3000 chars — enough to capture skills section
-    # without exceeding context limits or adding unnecessary cost
     excerpt = text[:3000].strip()
-
     prompt = f"""You are a resume parser. Extract ALL technical skills from the resume text below.
 
-Include: programming languages, frameworks, libraries, tools, platforms, databases,
-cloud services, methodologies, and any other technical competencies mentioned.
+                Include: programming languages, frameworks, libraries, tools, platforms, databases,
+                cloud services, methodologies, and any other technical competencies mentioned.
 
-Resume text:
-\"\"\"
-{excerpt}
-\"\"\"
+                Resume text:
+                \"\"\"
+                {excerpt}
+                \"\"\"
 
-Rules:
-- Respond ONLY with a valid JSON array of strings.
-- Each item must be a single skill or technology name.
-- Normalise capitalisation: use "Python" not "python", "AWS" not "aws".
-- Do NOT include soft skills (communication, leadership, teamwork etc.).
-- Do NOT include job titles or company names.
-- Do NOT add any explanation, markdown, or text outside the JSON array.
+                Rules:
+                - Respond ONLY with a valid JSON array of strings.
+                - Each item must be a single skill or technology name.
+                - Normalise capitalisation: "Python" not "python", "AWS" not "aws", "SAP ABAP" not "sap abap".
+                - Do NOT include soft skills (communication, leadership, teamwork etc.).
+                - Do NOT include job titles or company names.
+                - Do NOT add any explanation, markdown, or text outside the JSON array.
 
-Example output format:
-["Python", "FastAPI", "PostgreSQL", "Docker", "AWS", "React"]
+                Example output format:
+                ["Python", "FastAPI", "PostgreSQL", "Docker", "AWS", "React"]
 """
 
     try:
@@ -138,61 +158,63 @@ Example output format:
         )
         response.raise_for_status()
         raw = response.json().get("response", "").strip()
-
-        # Strip markdown fences if the LLM added them
         clean = raw.strip()
         if clean.startswith("```"):
             clean = re.sub(r"^```[a-z]*\n?", "", clean)
             clean = re.sub(r"```$", "", clean).strip()
-
+        # Find JSON array anywhere in response — handles LLM preamble text
+        start = clean.find("[")
+        end   = clean.rfind("]")
+        if start == -1 or end == -1 or end < start:
+            raise ValueError("No JSON array found in LLM response")
+        clean = clean[start : end + 1]
         skills = json.loads(clean)
-
         if not isinstance(skills, list):
             raise ValueError("LLM response is not a JSON array")
-
-        # Sanitise: keep only strings, strip whitespace, deduplicate
         skills = list({s.strip() for s in skills if isinstance(s, str) and s.strip()})
         logger.info(f"LLM extracted {len(skills)} skills")
         return skills
-
     except requests.exceptions.ConnectionError:
-        logger.error("Ollama not reachable during skill extraction. Returning empty skills.")
+        logger.error("Ollama not reachable during skill extraction.")
         return []
     except (json.JSONDecodeError, ValueError) as e:
-        logger.warning(f"Skill extraction LLM parse failed: {e}. Raw: {raw[:200]}")
+        logger.warning(f"Skill extraction parse failed: {e}. Raw: {raw[:200]}")
         return []
     except Exception as e:
-        logger.error(f"Skill extraction failed unexpectedly: {e}")
+        logger.error(f"Skill extraction failed: {e}")
         return []
 
-
-# ─────────────────────────────────────────────────────────────────────────────
 # MAIN ENTRY POINT
-# ─────────────────────────────────────────────────────────────────────────────
-
-def extract_metadata(text: str) -> dict:
+def extract_metadata(text: str, file_name: str = "") -> dict:
     """
-    Run all extractors on resume text and return a metadata dict
-    ready to be stored in ChromaDB.
+    Extract all metadata from resume text + filename.
 
-    Returns:
-        {
-            "candidate_name":   str,
-            "skills":           str   (comma-separated, for ChromaDB string field),
-            "experience_years": int,
-            "location":         str,
-            "skills_count":     int,
-        }
+    Priority order:
+      name       → filename parse → spaCy NER → "Unknown"
+      experience → filename bracket [Xy_Ym] → regex on text → 0
+      location   → spaCy NER → "Unknown"
+      skills     → Ollama LLM → []
     """
+    #  Name 
+    name = ""
+    if file_name:
+        name = extract_name_from_filename(file_name)
+    if not name or name == "Unknown":
+        name = extract_name_from_text(text)
+    #  Experience 
+    exp = -1
+    if file_name:
+        exp = extract_experience_from_filename(file_name)
+    if exp == -1:
+        exp = extract_experience_from_text(text)
+    #  Skills 
     skills = extract_skills_via_llm(text)
-
     metadata = {
-        "candidate_name":   extract_name(text),
-        "skills":           ", ".join(skills),   # ChromaDB requires string, not list
-        "experience_years": extract_experience_years(text),
+        "candidate_name":   name or "Unknown",
+        "skills":           ", ".join(skills),
+        "experience_years": exp if exp >= 0 else 0,
         "location":         extract_location(text),
         "skills_count":     len(skills),
     }
-
-    logger.debug(f"Extracted metadata: {metadata}")
+    logger.debug(f"Metadata for {file_name}: {metadata}")
     return metadata

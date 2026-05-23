@@ -54,7 +54,6 @@ def generate_resume_data(resume_id):
     exp_years  = random.randint(0, 12)
     num_skills = random.randint(4, 10)
     num_jobs   = max(1, min(exp_years // 2, 4))
-
     jobs = []
     for _ in range(num_jobs):
         jobs.append({
@@ -62,7 +61,6 @@ def generate_resume_data(resume_id):
             "company": random.choice(COMPANIES),
             "years":   f"{random.randint(2015, 2022)} - {random.randint(2022, 2024)}",
         })
-
     return {
         "id":          f"RES-{resume_id:05d}",
         "name":        fake.name(),
@@ -83,7 +81,6 @@ def write_pdf(data, path):
     c = canvas.Canvas(path, pagesize=A4)
     w, h = A4
     y = h - 50
-
     def line(text, size=11, bold=False, gap=18):
         nonlocal y
         c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
@@ -98,12 +95,10 @@ def write_pdf(data, path):
         c.setLineWidth(0.5)
         c.line(50, y, w - 50, y)
         y -= 10
-
     line(data["name"], size=16, bold=True, gap=22)
     line(data["title"], size=12, gap=16)
     line(f"{data['email']}  |  {data['phone']}  |  {data['location']}", size=9, gap=20)
     divider()
-
     line("PROFESSIONAL SUMMARY", size=11, bold=True, gap=16)
     summary = (f"{data['name']} is a {data['title']} with {data['experience']} years of experience "
                f"based in {data['location']}, skilled in {', '.join(data['skills'][:4])}.")
@@ -118,11 +113,9 @@ def write_pdf(data, path):
     if row:
         line(row.strip(), size=9, gap=18)
     divider()
-
     line("SKILLS", size=11, bold=True, gap=16)
     line(", ".join(data["skills"]), size=9, gap=18)
     divider()
-
     line("EXPERIENCE", size=11, bold=True, gap=16)
     for job in data["jobs"]:
         line(f"{job['title']}  -  {job['company']}  ({job['years']})", size=9, bold=True, gap=14)
@@ -157,10 +150,8 @@ def write_docx(data, path):
 def main():
     output_dir = "resumes"
     os.makedirs(output_dir, exist_ok=True)
-
     total = 20  # change to however many you need
     pdf_count = docx_count = 0
-
     for i in range(1, total + 1):
         data = generate_resume_data(i)
         if i % 2 == 0:
