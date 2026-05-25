@@ -28,7 +28,14 @@ The Resume Search Agent is a powerful, AI-driven application designed to revolut
 ## 🖥️ Screenshots
 
 <!-- TODO: Add actual screenshots of the application, showing search interface, results, and potentially ingestion status. -->
-<!-- ![Screenshot 1](path-to-screenshot-1.png) -->
+Home Page with Toggle modes
+
+<img width="1219" height="623" alt="Screenshot 2026-05-23 151726" src="https://github.com/user-attachments/assets/d9419115-c630-46af-bedb-b1c9d7d90760" />
+
+
+<img width="1146" height="631" alt="Screenshot 2026-05-23 152205" src="https://github.com/user-attachments/assets/a7f11dd5-f4bb-43a3-a1fa-2905f9eea570" />
+
+
 <!-- ![Screenshot 2](path-to-screenshot-2.png) -->
 
 ## 🛠️ Tech Stack
